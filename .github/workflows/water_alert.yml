@@ -1,24 +1,19 @@
 # ตำแหน่งไฟล์: .github/workflows/water_alert.yml
-# ‼️ นี่คือเวอร์ชันอัปเดต ‼️
+# ‼️ นี่คือเวอร์ชันอัปเดต (v6) ‼️
 
 name: 🌊 Inburi Water Level Alert
 
 on:
   schedule:
-    # 1. ตั้งเวลาทำงาน: รันทุก 1 ชั่วโมง
     - cron: '0 * * * *'
   workflow_dispatch:
-    # 2. เพิ่มปุ่มให้กดรันเองได้
 
 jobs:
   scrape-and-notify:
     runs-on: ubuntu-latest
-    
-    # --- ⬇️ เพิ่มส่วนนี้ ⬇️ ---
-    # 3. อนุญาตให้ Action นี้เขียนไฟล์กลับมาที่ Repo ได้
     permissions:
+      # ให้สิทธิ์เขียนไฟล์ (สำหรับ commit)
       contents: write
-    # --- ----------------- ---
       
     steps:
       - name: 1. Check out repository
@@ -37,27 +32,42 @@ jobs:
       - name: 4. Install Playwright browser
         run: playwright install --with-deps chromium
 
+      # ⬇️ เพิ่ม 'id: scrape' เพื่อให้ step อื่นอ้างอิงได้ ⬇️
       - name: 5. Run scraper script
+        id: scrape # ⬅️ เพิ่ม ID
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
         run: python scrape_water.py
       
-      # --- ⬇️ เพิ่มส่วนนี้ทั้งหมด ⬇️ ---
-      - name: 6. Configure Git
+      # ⬇️ Step นี้จะทำงาน "ต่อเมื่อ Step 5 ล้มเหลว" ⬇️
+      - name: 6. Upload Debug Screenshot on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshot
+          path: debug_screenshot.png
+          retention-days: 5
+
+      # ⬇️ Step นี้จะทำงาน "ต่อเมื่อ Step 5 สำเร็จ" ⬇️
+      - name: 7. Configure Git (on Success)
+        if: success()
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
-      - name: 7. Commit and push changes
+      
+      # ⬇️ Step นี้จะทำงาน "ต่อเมื่อ Step 5 สำเร็จ" ⬇️
+      - name: 8. Commit and push changes (on Success)
+        if: success()
         run: |
-          # ตรวจสอบว่ามีไฟล์ last_level.txt ที่เปลี่ยนแปลงหรือไม่
-          git add last_level.txt
-          
-          # ตรวจสอบสถานะ ถ้าไม่มีอะไรเปลี่ยนแปลง ให้ออก
-          if git diff-index --quiet HEAD; then
-            echo "No changes in water level, skipping commit."
+          # เราจะ add ไฟล์ต่อเมื่อมันมีอยู่จริงเท่านั้น
+          if [ -f "last_level.txt" ]; then
+            git add last_level.txt
+            if git diff-index --quiet HEAD; then
+              echo "No changes in water level, skipping commit."
+            else
+              git commit -m "Update last water level"
+              git push
+            fi
           else
-            # ถ้ามีการเปลี่ยนแปลง ให้ commit และ push
-            git commit -m "Update last water level"
-            git push
+            echo "last_level.txt not found, skipping commit."
           fi
