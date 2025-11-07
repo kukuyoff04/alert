@@ -4,11 +4,8 @@ name: 🌊 Inburi Water Level Alert
 
 on:
   schedule:
-    # 1. ตั้งเวลาทำงาน: รันทุก 1 ชั่วโมง (ที่นาทีที่ 0 ของทุกชั่วโมง)
     - cron: '0 * * * *'
-    
   workflow_dispatch:
-    # 2. เพิ่มปุ่มให้กดรันเองได้: ไปที่แท็บ Actions ใน GitHub แล้วกด "Run workflow"
 
 jobs:
   scrape-and-notify:
@@ -28,12 +25,19 @@ jobs:
           pip install -r requirements.txt
 
       - name: 4. Install Playwright browser
-        # ติดตั้ง chromium และ dependencies ที่จำเป็น
         run: playwright install --with-deps chromium
 
       - name: 5. Run scraper script
         env:
-          # 3. ดึง Token มาจาก Secrets ของ Repository
-          #    (คุณต้องไปตั้งค่าเองใน Settings > Secrets and variables > Actions)
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
         run: python scrape_water.py
+      
+      # --- ⬇️ เพิ่ม Step นี้เข้ามาใหม่ ⬇️ ---
+      - name: 6. Upload Debug Screenshot on Failure
+        # 'if: failure()' หมายความว่า step นี้จะทำงาน 'ต่อเมื่อ' step ที่ 5 ล้มเหลว
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshot # ชื่อของไฟล์ที่จะให้ดาวน์โหลด
+          path: debug_screenshot.png # ไฟล์ที่สคริปต์ python สร้างไว้
+          retention-days: 5 # เก็บไฟล์ไว้ 5 วัน
